@@ -1,0 +1,23 @@
+model Car {
+  id            Int      @id @default(autoincrement())
+  vin           String   @unique
+  year          Int
+  make          String
+  model         String
+  trim          String?
+  interiorColor String?
+  exteriorColor String?
+  engine        String?
+  transmission  String?
+  driveTrain    String?
+  bodyStyle     String?
+  fuelType      String?
+  carfaxUrl     String?
+  price         Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([make, model])
+  @@index([year])
+  @@index([price])
+}
