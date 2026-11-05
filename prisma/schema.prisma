@@ -10,5 +10,5 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = "postgresql://uskp92vri5jqp:AutoEx123456@127.0.0.1:5432/dbzhggviul1gu?schema=public"
+  url      = "postgresql://uahkszbg4bgae:iazkd1lvueqy@127.0.0.1:5432/dbrz47pdbqcql4?schema=public"
 }
