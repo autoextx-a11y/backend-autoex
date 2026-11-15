@@ -27,3 +27,6 @@ Thumbs.db
 
 # Generated Prisma client
 /generated/prisma/
+
+feed/
+generated/

@@ -1,23 +1,43 @@
 model Car {
-  id            Int      @id @default(autoincrement())
-  vin           String   @unique
-  year          Int
-  make          String
-  model         String
-  trim          String?
-  interiorColor String?
-  exteriorColor String?
-  engine        String?
-  transmission  String?
-  driveTrain    String?
-  bodyStyle     String?
-  fuelType      String?
-  carfaxUrl     String?
-  price         Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              Int       @id @default(autoincrement())
+  vin             String    @unique
+  stockNumber     String?
+  dealerId        Int
+  dealer          Dealer    @relation(fields: [dealerId], references: [id])
+
+  year            Int
+  make            String
+  model           String
+  trim            String?
+  odometer        Int?
+  price           Int?
+  interiorColor   String?
+  exteriorColor   String?
+  transmission    String?
+  bodyStyle       String?
+  condition       String?
+  certified       Boolean   @default(false)
+
+  // kept from your old model, the CSV doesn't provide these
+  engine          String?
+  driveTrain      String?
+  fuelType        String?
+  carfaxUrl       String?
+
+  // new, from the CSV
+  description     String?   @db.Text
+  equipment       String[]  @default([])
+  photos          String[] @default([])
+  photosUpdatedAt DateTime?
+  vdpUrl          String?
+
+  isActive        Boolean   @default(true)
+  lastSeenAt      DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([make, model])
   @@index([year])
   @@index([price])
+  @@index([isActive])
 }

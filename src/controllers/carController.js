@@ -40,7 +40,7 @@
 
 
 const carModel = require('../models/carModel');
-const { syncCars } = require('../services/carSyncService');
+
 
 exports.getCars = async (req, res, next) => {
   try {
@@ -69,15 +69,6 @@ exports.getCarById = async (req, res, next) => {
     const car = await carModel.findById(id);
     if (!car) return res.status(404).json({ message: 'Car not found' });
     res.json(car);
-  } catch (err) { 
-    res.status(500).json({ success: false, message: err.message, stack: err.stack }); 
-  }
-};
-
-exports.syncFromApi = async (req, res, next) => {
-  try {
-    const count = await syncCars();
-    res.json({ message: `Synced ${count} cars` });
   } catch (err) { 
     res.status(500).json({ success: false, message: err.message, stack: err.stack }); 
   }
