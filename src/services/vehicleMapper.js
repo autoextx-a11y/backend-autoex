@@ -64,7 +64,7 @@ const mapVehicle = (row, dealerId) => {
   const vin = String(row["VIN"] || "").trim().toUpperCase();
 
   const year = parseNumber(row["Year"]);
-  const make = String(row["make"] || "").trim();
+  const make = String(row["make"] || row["Make"] || "").trim();
   const model = String(row["Model"] || "").trim();
 
   if (!vin || !year || !make || !model) {

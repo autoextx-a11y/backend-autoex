@@ -86,24 +86,31 @@ const validateDealer = (dealer) => {
   }
 };
 
-const processFile = async (filePath) => {
+const processFile = async (
+  filePath,
+  { skipAgeCheck = false } = {}
+) => {
   const fileName = path.basename(filePath);
 
   let importRun = null;
   let rowsRead = 0;
   let rowsSkipped = 0;
+  let insertedCount = 0;
+  let updatedCount = 0;
 
   try {
-    const fileAgeSeconds =
-      (Date.now() - fs.statSync(filePath).mtimeMs) / 1000;
+   if (!skipAgeCheck) {
+  const fileAgeSeconds =
+    (Date.now() - fs.statSync(filePath).mtimeMs) / 1000;
 
-    if (fileAgeSeconds < MIN_AGE_SECONDS) {
-      throw new Error(
-        `File is too new. Wait ${Math.ceil(
-          MIN_AGE_SECONDS - fileAgeSeconds
-        )} more seconds.`
-      );
-    }
+  if (fileAgeSeconds < MIN_AGE_SECONDS) {
+    throw new Error(
+      `File is too new. Wait ${Math.ceil(
+        MIN_AGE_SECONDS - fileAgeSeconds
+      )} more seconds.`
+    );
+  }
+}
 
     const rows = readCsv(filePath);
 
@@ -184,47 +191,72 @@ const processFile = async (filePath) => {
         rowsSkipped,
       },
     });
-
     // Database changes are committed together.
-    await prisma.$transaction(async (tx) => {
-      await tx.dealer.upsert({
-        where: {
-          id: dealer.id,
-        },
-        update: {
-          name: dealer.name,
-          address: dealer.address,
-          city: dealer.city,
-          state: dealer.state,
-          zip: dealer.zip,
-          phone: dealer.phone,
-        },
-        create: dealer,
-      });
+await prisma.$transaction(async (tx) => {
+  await tx.dealer.upsert({
+    where: {
+      id: dealer.id,
+    },
+    update: {
+      name: dealer.name,
+      address: dealer.address,
+      city: dealer.city,
+      state: dealer.state,
+      zip: dealer.zip,
+      phone: dealer.phone,
+    },
+    create: dealer,
+  });
 
-      // A full snapshot means vehicles missing from the
-      // new feed should become inactive.
-      if (FULL_SNAPSHOT) {
-        await tx.car.updateMany({
-          where: {
-            dealerId: dealer.id,
-          },
-          data: {
-            isActive: false,
-          },
-        });
-      }
+  // Find existing VINs before updating.
+  const incomingVins = mappedRows.map((vehicle) => vehicle.vin);
 
-      for (const vehicle of mappedRows) {
-        await tx.car.upsert({
-          where: {
-            vin: vehicle.vin,
-          },
-          update: vehicle,
-          create: vehicle,
-        });
-      }
+  const existingCars = await tx.car.findMany({
+    where: {
+      vin: {
+        in: incomingVins,
+      },
+    },
+    select: {
+      vin: true,
+    },
+  });
+
+  const existingVins = new Set(
+    existingCars.map((car) => car.vin)
+  );
+
+  // Full snapshot: deactivate vehicles missing from this feed.
+  if (FULL_SNAPSHOT) {
+    await tx.car.updateMany({
+      where: {
+        dealerId: dealer.id,
+      },
+      data: {
+        isActive: false,
+      },
     });
+  }
+
+  for (const vehicle of mappedRows) {
+    if (existingVins.has(vehicle.vin)) {
+      updatedCount++;
+    } else {
+      insertedCount++;
+    }
+
+    await tx.car.upsert({
+      where: {
+        vin: vehicle.vin,
+      },
+      update: vehicle,
+      create: vehicle,
+    });
+  }
+});
+
+
+
 
     await prisma.importRun.update({
       where: {
@@ -247,11 +279,19 @@ const processFile = async (filePath) => {
     console.log(`Skipped: ${rowsSkipped} cars`);
     console.log(`Processed file: ${processedPath}`);
     console.log("--------------------------------");
+    console.log(`New vehicles: ${insertedCount}`);
+console.log(`Updated vehicles: ${updatedCount}`);
+console.log(`Total processed: ${mappedRows.length}`);
+console.log(`Skipped: ${rowsSkipped}`);
 
     return {
-      imported: mappedRows.length,
-      skipped: rowsSkipped,
-    };
+  imported: insertedCount,
+  updated: updatedCount,
+  skipped: rowsSkipped,
+  rowsRead,
+  message: `Successfully imported ${insertedCount} new vehicles and updated ${updatedCount} existing vehicles.`,
+};
+
   } catch (error) {
     console.error(`Import failed for ${fileName}:`, error.message);
 
@@ -335,6 +375,8 @@ const run = async () => {
   }
 };
 
+
 module.exports = {
   run,
+  processFile,
 };
