@@ -1,5 +1,46 @@
+// // const carModel = require('../models/carModel');
+// // const { syncCars } = require('../services/carSyncService');
+
+// // exports.getCars = async (req, res, next) => {
+// //   try {
+// //     const page = Math.max(parseInt(req.query.page) || 1, 1);
+// //     const limit = Math.min(parseInt(req.query.limit) || 12, 50);
+// //     const { make, model, year, bodyStyle, fuelType, minPrice, maxPrice } = req.query;
+
+// //     const { cars, total } = await carModel.findAll(
+// //       { make, model, year, bodyStyle, fuelType, minPrice, maxPrice }, page, limit
+// //     );
+
+// //     res.json({
+// //       data: cars,
+// //       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+// //     });
+// //   } catch (err) { next(err); }
+// // };
+
+// // exports.getCarById = async (req, res, next) => {
+// //   try {
+// //     const id = parseInt(req.params.id);
+// //     if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid car id' });
+
+// //     const car = await carModel.findById(id);
+// //     if (!car) return res.status(404).json({ message: 'Car not found' });
+// //     res.json(car);
+// //   } catch (err) { next(err); }
+// // };
+
+// // // Manual trigger to re-run the sync (protect this before going live)
+// // exports.syncFromApi = async (req, res, next) => {
+// //   try {
+// //     const count = await syncCars();
+// //     res.json({ message: `Synced ${count} cars` });
+// //   } catch (err) { next(err); }
+// // };
+
+
+
 // const carModel = require('../models/carModel');
-// const { syncCars } = require('../services/carSyncService');
+
 
 // exports.getCars = async (req, res, next) => {
 //   try {
@@ -15,7 +56,9 @@
 //       data: cars,
 //       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
 //     });
-//   } catch (err) { next(err); }
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message, stack: err.stack });
+//   }
 // };
 
 // exports.getCarById = async (req, res, next) => {
@@ -26,50 +69,96 @@
 //     const car = await carModel.findById(id);
 //     if (!car) return res.status(404).json({ message: 'Car not found' });
 //     res.json(car);
-//   } catch (err) { next(err); }
-// };
-
-// // Manual trigger to re-run the sync (protect this before going live)
-// exports.syncFromApi = async (req, res, next) => {
-//   try {
-//     const count = await syncCars();
-//     res.json({ message: `Synced ${count} cars` });
-//   } catch (err) { next(err); }
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message, stack: err.stack });
+//   }
 // };
 
 
 
-const carModel = require('../models/carModel');
-
+const carModel = require("../models/carModel");
+const prisma = require("../config/prisma");
 
 exports.getCars = async (req, res, next) => {
   try {
     const page = Math.max(parseInt(req.query.page) || 1, 1);
     const limit = Math.min(parseInt(req.query.limit) || 12, 50);
-    const { make, model, year, bodyStyle, fuelType, minPrice, maxPrice } = req.query;
+
+    const {
+      make,
+      model,
+      year,
+      bodyStyle,
+      fuelType,
+      minPrice,
+      maxPrice,
+    } = req.query;
 
     const { cars, total } = await carModel.findAll(
-      { make, model, year, bodyStyle, fuelType, minPrice, maxPrice }, page, limit
+      { make, model, year, bodyStyle, fuelType, minPrice, maxPrice },
+      page,
+      limit
     );
+
+    // TEMPORARY DATABASE DIAGNOSTICS
+    const [dbInfo, databaseCarCount, activeCarCount] =
+      await Promise.all([
+        prisma.$queryRaw`
+          SELECT
+            current_database() AS database,
+            current_user AS db_user,
+            inet_server_addr()::text AS server_address,
+            inet_server_port() AS server_port
+        `,
+        prisma.car.count(),
+        prisma.car.count({ where: { isActive: true } }),
+      ]);
+
+    console.log("========== PUBLIC API DATABASE DIAGNOSTIC ==========");
+    console.log("Database:", dbInfo);
+    console.log("Total cars:", databaseCarCount);
+    console.log("Active cars:", activeCarCount);
+    console.log("API filtered total:", total);
+    console.log("=====================================================");
 
     res.json({
       data: cars,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     });
-  } catch (err) { 
-    res.status(500).json({ success: false, message: err.message, stack: err.stack }); 
+  } catch (err) {
+    console.error("Get cars failed:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
 exports.getCarById = async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
-    if (Number.isNaN(id)) return res.status(400).json({ message: 'Invalid car id' });
+
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ message: "Invalid car id" });
+    }
 
     const car = await carModel.findById(id);
-    if (!car) return res.status(404).json({ message: 'Car not found' });
+
+    if (!car) {
+      return res.status(404).json({ message: "Car not found" });
+    }
+
     res.json(car);
-  } catch (err) { 
-    res.status(500).json({ success: false, message: err.message, stack: err.stack }); 
+  } catch (err) {
+    console.error("Get car by ID failed:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
